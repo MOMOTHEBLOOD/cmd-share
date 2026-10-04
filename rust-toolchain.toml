@@ -1,0 +1,3 @@
+# 与系列项目相同：本机无 MSVC Build Tools，固定 GNU 工具链
+[toolchain]
+channel = "stable-x86_64-pc-windows-gnu"

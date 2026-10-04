@@ -1,0 +1,3 @@
+# windows-sys 在 GNU 工具链下需要 dlltool（MSYS2 binutils 提供，装于 G: 盘）
+[env]
+DLLTOOL = "G:\\APPLICATIONS\\msys64\\mingw64\\bin\\dlltool.exe"

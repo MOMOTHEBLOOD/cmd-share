@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>cmd-share · 文件互传</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0 auto; max-width: 640px; padding: 16px;
+         font-family: system-ui, -apple-system, sans-serif;
+         background: #101418; color: #dfe6ec; }
+  h1 { font-size: 20px; margin: 8px 0 16px; }
+  section { background: #1a2129; border: 1px solid #2a3441; border-radius: 12px;
+            padding: 14px; margin-bottom: 14px; }
+  h2 { font-size: 15px; margin: 0 0 10px; color: #9fb3c8; }
+  button { background: #2f81f7; color: #fff; border: 0; border-radius: 8px;
+           padding: 8px 14px; font-size: 14px; margin: 2px 4px 2px 0; }
+  button.ghost { background: #2a3441; }
+  ul { list-style: none; margin: 0; padding: 0; max-height: 40vh; overflow: auto; }
+  li { padding: 8px 4px; border-bottom: 1px solid #232d38;
+       display: flex; justify-content: space-between; gap: 8px; }
+  li a { color: #6cb6ff; text-decoration: none; word-break: break-all; }
+  .size { color: #7d8b99; white-space: nowrap; font-size: 12px; }
+  textarea { width: 100%; min-height: 70px; background: #0d1117; color: #dfe6ec;
+             border: 1px solid #2a3441; border-radius: 8px; padding: 8px; font-size: 14px; }
+  #drop { border: 2px dashed #2a3441; border-radius: 10px; padding: 18px;
+          text-align: center; color: #7d8b99; }
+  #drop.on { border-color: #2f81f7; color: #6cb6ff; }
+  .pbar { background: #0d1117; border-radius: 6px; height: 8px; overflow: hidden; margin: 4px 0; }
+  .pbar > div { background: #2f81f7; height: 100%; width: 0; }
+  .prow { font-size: 13px; margin: 6px 0; word-break: break-all; }
+  pre { background: #0d1117; border-radius: 8px; padding: 8px; white-space: pre-wrap;
+        word-break: break-all; max-height: 120px; overflow: auto; font-size: 13px; }
+  .empty { color: #7d8b99; padding: 8px 4px; }
+</style>
+</head>
+<body>
+<h1>📤 cmd-share · 文件互传</h1>
+
+<section>
+  <h2>电脑文件（点击下载） <button class="ghost" onclick="refresh()">刷新</button></h2>
+  <ul id="files"><li class="empty">加载中…</li></ul>
+</section>
+
+<section>
+  <h2>上传到电脑</h2>
+  <div id="drop">点下方按钮选择，或把文件拖到这里</div>
+  <input type="file" id="picker" multiple hidden>
+  <p><button onclick="picker.click()">选择文件</button></p>
+  <div id="prog"></div>
+</section>
+
+<section>
+  <h2>文本 → 电脑（自动进电脑剪贴板）</h2>
+  <textarea id="txt" placeholder="粘贴或输入文字…"></textarea>
+  <p><button onclick="sendText()">发送到电脑</button></p>
+</section>
+
+<section>
+  <h2>电脑剪贴板 <button class="ghost" onclick="loadClip()">获取</button>
+      <button class="ghost" onclick="copyClip()">复制</button></h2>
+  <pre id="clip">（每 5 秒自动刷新）</pre>
+</section>
+
+<script>
+const T = new URLSearchParams(location.search).get('t') || '';
+const q = p => p + '?t=' + encodeURIComponent(T);
+const fmt = n => n >= 1073741824 ? (n/1073741824).toFixed(1)+' GB'
+             : n >= 1048576 ? (n/1048576).toFixed(1)+' MB'
+             : n >= 1024 ? (n/1024).toFixed(1)+' KB' : n + ' B';
+
+async function refresh() {
+  try {
+    const j = await (await fetch(q('/api/list'))).json();
+    const ul = document.getElementById('files');
+    ul.innerHTML = j.files.length ? '' : '<li class="empty">目录为空</li>';
+    for (const f of j.files) {
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = q('/d/' + encodeURIComponent(f.name));
+      a.textContent = f.name;
+      const s = document.createElement('span');
+      s.className = 'size'; s.textContent = fmt(f.size);
+      li.append(a, s); ul.append(li);
+    }
+  } catch (e) { /* 忽略瞬时错误 */ }
+}
+
+const picker = document.getElementById('picker');
+picker.onchange = () => upload([...picker.files]);
+const drop = document.getElementById('drop');
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('on'); };
+drop.ondragleave = () => drop.classList.remove('on');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('on'); upload([...e.dataTransfer.files]); };
+
+function upload(files) {
+  const prog = document.getElementById('prog');
+  for (const f of files) {
+    const row = document.createElement('div');
+    row.className = 'prow';
+    row.innerHTML = f.name + ' <span class="size">0%</span><div class="pbar"><div></div></div>';
+    prog.prepend(row);
+    const bar = row.querySelector('.pbar > div');
+    const pct = row.querySelector('.size');
+    const fd = new FormData();
+    fd.append('file', f);
+    const xh = new XMLHttpRequest();
+    xh.open('POST', q('/up'));
+    xh.upload.onprogress = e => {
+      const p = Math.round(e.loaded / e.total * 100);
+      bar.style.width = p + '%'; pct.textContent = p + '%';
+    };
+    xh.onload = () => { if (xh.status === 200) { pct.textContent = '完成'; setTimeout(refresh, 400); }
+                        else pct.textContent = '失败(' + xh.status + ')'; };
+    xh.onerror = () => pct.textContent = '网络错误';
+    xh.send(fd);
+  }
+}
+
+async function sendText() {
+  const t = document.getElementById('txt').value;
+  if (!t.trim()) return;
+  const r = await fetch(q('/api/text'), { method: 'POST',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: t}) });
+  alert(r.ok ? '已发送到电脑并复制到剪贴板' : '发送失败(' + r.status + ')');
+  document.getElementById('txt').value = '';
+}
+
+async function loadClip() {
+  try {
+    const j = await (await fetch(q('/api/clip'))).json();
+    document.getElementById('clip').textContent = j.text || '（电脑剪贴板是空的）';
+  } catch (e) {}
+}
+setInterval(loadClip, 5000);
+
+function copyClip() {
+  const t = document.getElementById('clip').textContent;
+  navigator.clipboard.writeText(t).then(() => alert('已复制到手机'));
+}
+
+refresh();
+loadClip();
+</script>
+</body>
+</html>
