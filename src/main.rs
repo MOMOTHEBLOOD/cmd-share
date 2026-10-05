@@ -37,10 +37,26 @@ async fn main() -> Result<()> {
     let token = cli
         .token
         .unwrap_or_else(|| Uuid::new_v4().simple().to_string()[..6].to_string());
-    let ip = cli
-        .ip
-        .or_else(cmd_share::net::lan_ip)
-        .context("无法探测局域网 IP——请确认已联网，或用 --ip 手动指定")?;
+
+    // IP 解析优先级：--ip 手动 > 路由探测（有外网时最准） > 网卡枚举（热点等
+    // 无外网路由场景的兜底，如手机热点网段 192.168.x）
+    let candidates = cmd_share::net::all_ipv4s();
+    let (ip, via) = match &cli.ip {
+        Some(i) => (i.clone(), "手动指定"),
+        None => match cmd_share::net::lan_ip() {
+            Some(i) => (i, "路由探测"),
+            None => match cmd_share::net::prefer(&candidates) {
+                Some(i) => (i.clone(), "网卡枚举兜底"),
+                None => bail!("无法获取局域网 IP——请确认已联网，或用 --ip 手动指定"),
+            },
+        },
+    };
+    let alternates: Vec<String> = candidates
+        .iter()
+        .filter(|c| **c != ip)
+        .take(3)
+        .cloned()
+        .collect();
     let url = format!("http://{ip}:{}/?t={token}", cli.port);
 
     // ---- 统计共享目录 ----
@@ -53,8 +69,14 @@ async fn main() -> Result<()> {
         human(total)
     );
     println!();
-    println!("手机浏览器打开：");
+    println!("手机浏览器打开（IP 来源：{via}）：");
     println!("  \x1b[1;36m{url}\x1b[0m");
+    if !alternates.is_empty() {
+        println!("连不上主地址时试试其他网卡：");
+        for a in &alternates {
+            println!("  \x1b[2mhttp://{a}:{}/?t={token}\x1b[0m", cli.port);
+        }
+    }
     println!();
     println!("或扫码（手机相机/微信扫一扫）：");
     println!("{}", cmd_share::qr::render_terminal(&url));
