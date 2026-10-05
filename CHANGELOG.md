@@ -3,6 +3,24 @@
 格式基于 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本遵循 [SemVer](https://semver.org/lang/zh-CN/)。
 
+## [0.3.0] - 2026-10-05
+
+### Added
+
+- **`--hotspot` 一条龙**：通过系统原生 WinRT API（PowerShell 调
+  NetworkOperatorTetheringManager，无新增依赖）自动拉起 Windows 移动热点，
+  终端给出 Wi-Fi 入网二维码（WIFI: 协议，特殊字符转义）+ 互传地址码
+- 主地址自动锁定热点 ICS 网段（192.168.137.x，轮询等待网卡就绪），
+  Ctrl+C 退出时自动恢复热点原状；`--hotspot-stop` / `--hotspot-status`
+  分别用于手动收尾与只读诊断；`--hotspot-ssid/-pass` 可自定义
+- 真机全链路验证：拉起热点 → 双码 → 服务经 192.168.137.1 可达（401/200）→ 恢复关闭
+
+### Fixed
+
+- PowerShell 脚本注入方式：`-Command -` 会静默吞脚本、逐行 `iex` 会拆碎
+  多行结构，改为 stdin + `Out-String | iex` 整体执行；补
+  `System.Runtime.WindowsRuntime` 程序集加载与 UTF-8 输出编码
+
 ## [0.2.0] - 2026-10-05
 
 ### Added

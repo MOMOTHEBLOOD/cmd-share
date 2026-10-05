@@ -8,6 +8,7 @@
 //! - `qr.rs`     URL → 终端二维码（半块 + 反色）
 //! - `server.rs` axum 路由与处理器（token 校验中间件）
 
+pub mod hotspot;
 pub mod net;
 pub mod qr;
 pub mod server;
