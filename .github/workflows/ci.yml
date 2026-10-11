@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      # windows-sys 系依赖在 GNU 工具链下需要 dlltool（windows-latest 预装 MSYS2）
+      - name: Ensure dlltool available
+        shell: pwsh
+        run: |
+          "DLLTOOL=C:\msys64\mingw64\bin\dlltool.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: fmt
+        run: cargo fmt --check
+
+      - name: clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: test
+        run: cargo test
+
+      - name: build release
+        run: cargo build --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cmd-share-exe
+          path: target/release/cmd-share.exe
